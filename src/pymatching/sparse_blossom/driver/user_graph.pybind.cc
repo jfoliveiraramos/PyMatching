@@ -655,16 +655,9 @@ void pm_pybind::pybind_user_graph_methods(py::module &m, py::class_<pm::UserGrap
 
                     for (const auto &iw_obj : et[5].cast<py::list>()) {
                         auto iw_tuple = iw_obj.cast<py::tuple>();
-                        pm::ImpliedWeightUnconverted iw;
-                        iw.node1 = iw_tuple[0].cast<size_t>();
-                        iw.node2 = iw_tuple[1].cast<size_t>();
-                        iw.implied_weight = iw_tuple[2].cast<double>();
-                        edge.implied_weights_for_other_edges.push_back(iw);
+                        edge.implied_weights_for_other_edges.emplace_back(
+                            iw_tuple[0].cast<size_t>(), iw_tuple[1].cast<size_t>(), iw_tuple[2].cast<double>());
                     }
-
-                    size_t max_node = std::max(edge.node1, edge.node2);
-                    while (g.nodes.size() <= max_node)
-                        g.nodes.emplace_back();
 
                     g.edges.push_back(edge);
                     auto edge_it = std::prev(g.edges.end());
