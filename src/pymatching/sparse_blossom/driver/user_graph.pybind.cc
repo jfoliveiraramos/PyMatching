@@ -14,10 +14,6 @@
 
 #include "pymatching/sparse_blossom/driver/user_graph.pybind.h"
 
-#include <map>
-#include <pybind11/cast.h>
-#include <pybind11/pytypes.h>
-
 #include "pybind11/pybind11.h"
 #include "pymatching/sparse_blossom/driver/mwpm_decoding.h"
 #include "pymatching/sparse_blossom/driver/user_graph.h"
@@ -25,7 +21,7 @@
 
 using namespace py::literals;
 
-pm_pybind::CompressedSparseColumnCheckMatrix::CompressedSparseColumnCheckMatrix(const py::object& matrix) {
+pm_pybind::CompressedSparseColumnCheckMatrix::CompressedSparseColumnCheckMatrix(const py::object &matrix) {
     py::object csc_matrix = py::module_::import("scipy.sparse").attr("csc_matrix");
     if (!py::isinstance(matrix, csc_matrix))
         throw std::invalid_argument("Check matrix must be a `scipy.sparse.csc_matrix`.");
@@ -68,12 +64,12 @@ pm_pybind::CompressedSparseColumnCheckMatrix::CompressedSparseColumnCheckMatrix(
     }
 }
 
-py::class_<pm::UserGraph> pm_pybind::pybind_user_graph(py::module& m) {
+py::class_<pm::UserGraph> pm_pybind::pybind_user_graph(py::module &m) {
     auto g = py::class_<pm::UserGraph>(m, "MatchingGraph");
     return g;
 }
 
-pm::MERGE_STRATEGY merge_strategy_from_string(const std::string& merge_strategy) {
+pm::MERGE_STRATEGY merge_strategy_from_string(const std::string &merge_strategy) {
     static std::unordered_map<std::string, pm::MERGE_STRATEGY> const table = {
         {"disallow", pm::DISALLOW},
         {"independent", pm::INDEPENDENT},
@@ -88,19 +84,19 @@ pm::MERGE_STRATEGY merge_strategy_from_string(const std::string& merge_strategy)
     }
 }
 
-void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGraph>& g) {
+void pm_pybind::pybind_user_graph_methods(py::module &m, py::class_<pm::UserGraph> &g) {
     g.def(py::init<>());
     g.def(py::init<size_t>(), "num_nodes"_a);
     g.def(py::init<size_t, size_t>(), "num_nodes"_a, "num_fault_ids"_a);
     g.def(
         "add_edge",
-        [](pm::UserGraph& self,
+        [](pm::UserGraph &self,
            int64_t node1,
            int64_t node2,
-           const std::set<size_t>& observables,
+           const std::set<size_t> &observables,
            double weight,
            double error_probability,
-           const std::string& merge_strategy) {
+           const std::string &merge_strategy) {
             // Using signed integer (int64_t) instead of size_t for the python API, since it can be useful to
             // return -1 as the virtual boundary when inspecting the graph.
             if (node1 < 0 || node2 < 0)
@@ -126,12 +122,12 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "merge_strategy"_a);
     g.def(
         "add_boundary_edge",
-        [](pm::UserGraph& self,
+        [](pm::UserGraph &self,
            int64_t node,
-           const std::set<size_t>& observables,
+           const std::set<size_t> &observables,
            double weight,
            double error_probability,
-           const std::string& merge_strategy) {
+           const std::string &merge_strategy) {
             // Using signed integer (int64_t) instead of size_t for the python API, since it can be useful to
             // return -1 as the virtual boundary when inspecting the graph.
             if (node < 0)
@@ -162,18 +158,18 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
     g.def("get_num_edges", &pm::UserGraph::get_num_edges);
     g.def("get_num_detectors", &pm::UserGraph::get_num_detectors);
     g.def("all_edges_have_error_probabilities", &pm::UserGraph::all_edges_have_error_probabilities);
-    g.def("add_noise", [](pm::UserGraph& self) {
+    g.def("add_noise", [](pm::UserGraph &self) {
         auto error_vec = new std::vector<uint8_t>(self.get_num_observables(), 0);
         auto syndrome_vec = new std::vector<uint8_t>(self.get_num_nodes(), 0);
         self.add_noise(error_vec->data(), syndrome_vec->data());
 
-        auto syndrome_capsule = py::capsule(syndrome_vec, [](void* syndrome) {
-            delete reinterpret_cast<std::vector<uint8_t>*>(syndrome);
+        auto syndrome_capsule = py::capsule(syndrome_vec, [](void *syndrome) {
+            delete reinterpret_cast<std::vector<uint8_t> *>(syndrome);
         });
         py::array_t<int> syndrome_arr =
             py::array_t<uint8_t>(syndrome_vec->size(), syndrome_vec->data(), syndrome_capsule);
-        auto err_capsule = py::capsule(error_vec, [](void* error) {
-            delete reinterpret_cast<std::vector<uint8_t>*>(error);
+        auto err_capsule = py::capsule(error_vec, [](void *error) {
+            delete reinterpret_cast<std::vector<uint8_t> *>(error);
         });
         py::array_t<int> error_arr = py::array_t<uint8_t>(error_vec->size(), error_vec->data(), err_capsule);
 
@@ -182,17 +178,17 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
     });
     g.def(
         "decode",
-        [](pm::UserGraph& self, const py::array_t<uint64_t>& detection_events, bool enable_correlations) {
+        [](pm::UserGraph &self, const py::array_t<uint64_t> &detection_events, bool enable_correlations) {
             std::vector<uint64_t> detection_events_vec(
                 detection_events.data(), detection_events.data() + detection_events.size());
-            auto& mwpm = enable_correlations ? self.get_mwpm_with_search_graph() : self.get_mwpm();
+            auto &mwpm = enable_correlations ? self.get_mwpm_with_search_graph() : self.get_mwpm();
             auto obs_crossed = new std::vector<uint8_t>(self.get_num_observables(), 0);
             pm::total_weight_int weight = 0;
             pm::decode_detection_events(mwpm, detection_events_vec, obs_crossed->data(), weight, enable_correlations);
             double rescaled_weight = (double)weight / mwpm.flooder.graph.normalising_constant;
 
-            auto err_capsule = py::capsule(obs_crossed, [](void* x) {
-                delete reinterpret_cast<std::vector<uint8_t>*>(x);
+            auto err_capsule = py::capsule(obs_crossed, [](void *x) {
+                delete reinterpret_cast<std::vector<uint8_t> *>(x);
             });
             py::array_t<uint8_t> obs_crossed_arr =
                 py::array_t<uint8_t>(obs_crossed->size(), obs_crossed->data(), err_capsule);
@@ -203,8 +199,8 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     g.def(
         "decode_to_edges_array",
-        [](pm::UserGraph& self, const py::array_t<uint64_t>& detection_events, bool enable_correlations) {
-            auto& mwpm = self.get_mwpm_with_search_graph();
+        [](pm::UserGraph &self, const py::array_t<uint64_t> &detection_events, bool enable_correlations) {
+            auto &mwpm = self.get_mwpm_with_search_graph();
             std::vector<uint64_t> detection_events_vec(
                 detection_events.data(), detection_events.data() + detection_events.size());
             auto edges = new std::vector<int64_t>();
@@ -223,19 +219,19 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     g.def(
         "decode_to_matched_detection_events_array",
-        [](pm::UserGraph& self, const py::array_t<uint64_t>& detection_events) {
-            auto& mwpm = self.get_mwpm();
+        [](pm::UserGraph &self, const py::array_t<uint64_t> &detection_events) {
+            auto &mwpm = self.get_mwpm();
             std::vector<uint64_t> detection_events_vec(
                 detection_events.data(), detection_events.data() + detection_events.size());
             pm::decode_detection_events_to_match_edges(mwpm, detection_events_vec);
             py::ssize_t num_edges = (py::ssize_t)(mwpm.flooder.match_edges.size());
             py::array_t<int64_t> match_edges = py::array_t<int64_t>(num_edges * 2);
             py::buffer_info buff = match_edges.request();
-            int64_t* ptr = (int64_t*)buff.ptr;
+            int64_t *ptr = (int64_t *)buff.ptr;
 
             // Convert match edges to a vector of int64_t
             for (size_t i = 0; i < mwpm.flooder.match_edges.size(); i++) {
-                auto& e = mwpm.flooder.match_edges[i];
+                auto &e = mwpm.flooder.match_edges[i];
                 ptr[2 * i] = e.loc_from - &mwpm.flooder.graph.nodes[0];
                 if (e.loc_to) {
                     ptr[2 * i + 1] = e.loc_to - &mwpm.flooder.graph.nodes[0];
@@ -250,8 +246,8 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "detection_events"_a);
     g.def(
         "decode_batch",
-        [](pm::UserGraph& self,
-           const py::array_t<uint8_t>& shots,
+        [](pm::UserGraph &self,
+           const py::array_t<uint8_t> &shots,
            bool bit_packed_shots,
            bool bit_packed_predictions,
            bool enable_correlations) {
@@ -283,13 +279,13 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
             py::array_t<uint8_t> predictions = py::array_t<uint8_t>(shots.shape(0) * num_observable_bytes);
             predictions[py::make_tuple(py::ellipsis())] = 0;  // Initialise to 0
             py::buffer_info buff = predictions.request();
-            uint8_t* predictions_ptr = (uint8_t*)buff.ptr;
+            uint8_t *predictions_ptr = (uint8_t *)buff.ptr;
 
             // Reserve weights array
             py::array_t<double> weights = py::array_t<double>(shots.shape(0));
             auto ws = weights.mutable_unchecked<1>();
 
-            auto& mwpm = enable_correlations ? self.get_mwpm_with_search_graph() : self.get_mwpm();
+            auto &mwpm = enable_correlations ? self.get_mwpm_with_search_graph() : self.get_mwpm();
             std::vector<uint64_t> detection_events;
 
             // Vector used to extract predicted observables when decoding if bit_packed_predictions is true
@@ -344,14 +340,14 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     g.def(
         "decode_to_matched_detection_events_dict",
-        [](pm::UserGraph& self, const py::array_t<uint64_t>& detection_events) {
-            auto& mwpm = self.get_mwpm();
+        [](pm::UserGraph &self, const py::array_t<uint64_t> &detection_events) {
+            auto &mwpm = self.get_mwpm();
             std::vector<uint64_t> detection_events_vec(
                 detection_events.data(), detection_events.data() + detection_events.size());
             pm::decode_detection_events_to_match_edges(mwpm, detection_events_vec);
             py::dict match_dict;
             // Convert match edges to a vector of int64_t
-            for (auto& e : mwpm.flooder.match_edges) {
+            for (auto &e : mwpm.flooder.match_edges) {
                 int64_t from_idx = e.loc_from - &mwpm.flooder.graph.nodes[0];
                 if (e.loc_to) {
                     int64_t to_idx = e.loc_to - &mwpm.flooder.graph.nodes[0];
@@ -365,10 +361,10 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
             return match_dict;
         },
         "detection_events"_a);
-    g.def("get_edges", [](const pm::UserGraph& self) {
+    g.def("get_edges", [](const pm::UserGraph &self) {
         py::list edges;
 
-        for (auto& e : self.edges) {
+        for (auto &e : self.edges) {
             double p;
             if (e.error_probability < 0 || e.error_probability > 1) {
                 p = -1.0;
@@ -391,7 +387,7 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
     g.def("has_boundary_edge", &pm::UserGraph::has_boundary_edge, "node"_a);
     g.def(
         "get_edge_data",
-        [](const pm::UserGraph& self, size_t node1, size_t node2) {
+        [](const pm::UserGraph &self, size_t node1, size_t node2) {
             if (node1 >= self.nodes.size())
                 throw std::invalid_argument("node1 (" + std::to_string(node1) + ") not in graph");
             size_t idx = self.nodes[node1].index_of_neighbor(node2);
@@ -411,7 +407,7 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "node2"_a);
     g.def(
         "get_boundary_edge_data",
-        [](const pm::UserGraph& self, size_t node) {
+        [](const pm::UserGraph &self, size_t node) {
             if (node >= self.nodes.size())
                 throw std::invalid_argument("node (" + std::to_string(node) + ") not in graph");
             size_t idx = self.nodes[node].index_of_neighbor(SIZE_MAX);
@@ -429,7 +425,7 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "node"_a);
     m.def(
         "detector_error_model_to_matching_graph",
-        [](const char* dem_string, bool enable_correlations) {
+        [](const char *dem_string, bool enable_correlations) {
             auto dem = stim::DetectorErrorModel(dem_string);
             return pm::detector_error_model_to_user_graph(dem, enable_correlations, pm::NUM_DISTINCT_WEIGHTS);
         },
@@ -437,8 +433,8 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     m.def(
         "detector_error_model_file_to_matching_graph",
-        [](const char* dem_path, bool enable_correlations) {
-            FILE* file = fopen(dem_path, "r");
+        [](const char *dem_path, bool enable_correlations) {
+            FILE *file = fopen(dem_path, "r");
             if (file == nullptr) {
                 std::stringstream msg;
                 msg << "Failed to open '" << dem_path << "'";
@@ -452,8 +448,8 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     m.def(
         "stim_circuit_file_to_matching_graph",
-        [](const char* stim_circuit_path, bool enable_correlations) {
-            FILE* file = fopen(stim_circuit_path, "r");
+        [](const char *stim_circuit_path, bool enable_correlations) {
+            FILE *file = fopen(stim_circuit_path, "r");
             if (file == nullptr) {
                 std::stringstream msg;
                 msg << "Failed to open '" << stim_circuit_path << "'";
@@ -469,15 +465,15 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
         "enable_correlations"_a = false);
     m.def(
         "sparse_column_check_matrix_to_matching_graph",
-        [](const py::object& check_matrix,
-           const py::array_t<double>& weights,
-           const py::array_t<double>& error_probabilities,
-           const std::string& merge_strategy,
+        [](const py::object &check_matrix,
+           const py::array_t<double> &weights,
+           const py::array_t<double> &error_probabilities,
+           const std::string &merge_strategy,
            bool use_virtual_boundary_node,
            size_t num_repetitions,
-           const py::array_t<double>& timelike_weights,
-           const py::array_t<double>& measurement_error_probabilities,
-           py::object& faults_matrix) {
+           const py::array_t<double> &timelike_weights,
+           const py::array_t<double> &measurement_error_probabilities,
+           py::object &faults_matrix) {
             auto H = CompressedSparseColumnCheckMatrix(check_matrix);
 
             if (faults_matrix.is(py::none())) {
@@ -619,11 +615,11 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
 
     g.def(
         py::pickle(
-            [](const pm::UserGraph& g) {
+            [](pm::UserGraph &g) {
                 py::list edges_list;
-                for (const auto& edge : g.edges) {
+                for (const auto &edge : g.edges) {
                     py::list implied_weights_list;
-                    for (const auto& iw : edge.implied_weights_for_other_edges) {
+                    for (const auto &iw : edge.implied_weights_for_other_edges) {
                         implied_weights_list.append(py::make_tuple(iw.node1, iw.node2, iw.implied_weight));
                     }
                     edges_list.append(
@@ -636,14 +632,19 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
                             implied_weights_list));
                 }
 
-                return py::make_tuple(edges_list, g.boundary_nodes, g.loaded_from_dem_without_correlations);
+                return py::make_tuple(
+                    g.get_num_nodes(),
+                    g.get_num_observables(),
+                    edges_list,
+                    g.boundary_nodes,
+                    g.loaded_from_dem_without_correlations);
             },
             [](py::tuple t) {
-                pm::UserGraph g;
-                g.boundary_nodes = t[1].cast<std::set<size_t>>();
-                g.loaded_from_dem_without_correlations = t[2].cast<bool>();
+                pm::UserGraph g(t[0].cast<size_t>(), t[1].cast<size_t>());
+                g.boundary_nodes = t[3].cast<std::set<size_t>>();
+                g.loaded_from_dem_without_correlations = t[4].cast<bool>();
 
-                for (const auto& edge_obj : t[0].cast<py::list>()) {
+                for (const auto &edge_obj : t[2].cast<py::list>()) {
                     auto et = edge_obj.cast<py::tuple>();
                     pm::UserEdge edge;
                     edge.node1 = et[0].cast<size_t>();
@@ -652,7 +653,7 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
                     edge.weight = et[3].cast<double>();
                     edge.error_probability = et[4].cast<double>();
 
-                    for (const auto& iw_obj : et[5].cast<py::list>()) {
+                    for (const auto &iw_obj : et[5].cast<py::list>()) {
                         auto iw_tuple = iw_obj.cast<py::tuple>();
                         pm::ImpliedWeightUnconverted iw;
                         iw.node1 = iw_tuple[0].cast<size_t>();
@@ -668,8 +669,8 @@ void pm_pybind::pybind_user_graph_methods(py::module& m, py::class_<pm::UserGrap
                     g.edges.push_back(edge);
                     auto edge_it = std::prev(g.edges.end());
 
-                    g.nodes[edge.node1].neighbors.push_back({edge_it, 0});
-                    g.nodes[edge.node2].neighbors.push_back({edge_it, 1});
+                    g.nodes[edge.node1].neighbors.push_back({edge_it, 1});
+                    g.nodes[edge.node2].neighbors.push_back({edge_it, 0});
                 }
 
                 for (size_t i : g.boundary_nodes)
