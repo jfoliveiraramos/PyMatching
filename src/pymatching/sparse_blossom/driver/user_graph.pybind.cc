@@ -663,7 +663,8 @@ void pm_pybind::pybind_user_graph_methods(py::module &m, py::class_<pm::UserGrap
                     auto edge_it = std::prev(g.edges.end());
 
                     g.nodes[edge.node1].neighbors.push_back({edge_it, 1});
-                    g.nodes[edge.node2].neighbors.push_back({edge_it, 0});
+                    if (edge.node2 != SIZE_MAX && edge.node2 != edge.node1)
+                        g.nodes[edge.node2].neighbors.push_back({edge_it, 0});
                 }
 
                 for (size_t i : g.boundary_nodes)
